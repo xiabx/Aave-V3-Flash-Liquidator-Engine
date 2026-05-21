@@ -1,0 +1,102 @@
+# ======================================
+# 项目运行输出与数据 (Project Specific)
+# ======================================
+/bin/
+/dist/
+/build/
+/out/
+/lib/
+/logs/
+/cache/
+/.junie/
+/state_snapshots/
+aave_v3.6
+
+# ======================================
+# Go 语言专属 (Go Specific)
+# ======================================
+# 编译生成的可执行文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试相关
+coverage.out
+coverage.html
+*.test
+
+# 依赖目录
+vendor/
+
+# 本地工具
+/tools/**/*
+!/tools/README.md
+
+# ======================================
+# 环境变量配置 (Environment Variables)
+# ======================================
+# 敏感信息禁止提交
+.env*
+# 保留环境变量示例文件
+!.env_base_example
+
+# ======================================
+# 智能合约 / Foundry (Smart Contracts)
+# ======================================
+# Foundry output
+/contract/out/
+/contract/cache/
+/contract/lib/
+/contract/broadcast/
+
+# Anvil state
+anvil.json
+
+# node.js dependencies
+node_modules/
+
+# ======================================
+# 通用开发文件 (General)
+# ======================================
+# 日志文件
+*.log
+
+# 临时/压缩文件
+*.tmp
+*.temp
+*.zip
+*.tar.gz
+*.rar
+
+# ======================================
+# IDE 编辑器忽略 (IDE & Editors)
+# ======================================
+# JetBrains (GoLand, etc.)
+.idea/
+*.iml
+*.ipr
+*.iws
+*.ids
+*.ws
+runConfigurations/
+
+# ======================================
+# 操作系统文件 (OS Files)
+# ======================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Linux
+*~
