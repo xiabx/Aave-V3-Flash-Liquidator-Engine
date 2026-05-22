@@ -92,19 +92,20 @@ func (s *StrategyEngine) CalculateOptimalRecipe(userAddr string, position *model
 	for _, debt := range debts {
 		debtBase := valueInBaseCurrency(debt.balance, debt.price, debt.decimals)
 
-		maxLiquidatableDebt := new(big.Int).Set(debt.balance) // 默认允许 100% 清算
+		maxLiquidatableDebt := new(big.Int).Set(debt.balance)
 
-		// 如果总抵押和总债务均 >= 2000 USD，且 HF > 0.95，则触发 50% 限制
+		// 全局总抵押 >= 2000 USD 且 全局总负债 >= 2000 USD 且 健康因子 > 0.95
 		if totalCollateralInBase.Cmp(MinBaseMaxCloseFactorThreshold) >= 0 &&
 			totalDebtInBase.Cmp(MinBaseMaxCloseFactorThreshold) >= 0 &&
 			hf.Cmp(CloseFactorHfThreshold) > 0 {
 
-			// 计算全局默认允许清算的债务基准 (总债务的 50%)
+			// 计算全局允许的最大清算额度上限 (总债务价值的 50%)
 			totalDefaultLiquidatableBase := new(big.Int).Mul(totalDebtInBase, DefaultLiquidationCloseFactor)
 			totalDefaultLiquidatableBase.Div(totalDefaultLiquidatableBase, PercentageFactor)
 
-			// 如果当前单项债务的价值超过了总债务的 50%，则该单项债务只能被清算 totalDefaultLiquidatableBase等值的数量
+			// 如果该单项债务的价值超过了总债务的 50%
 			if debtBase.Cmp(totalDefaultLiquidatableBase) > 0 {
+				// 反向折算：将 50% 的 USD 价值转化为对应的债务代币绝对数量
 				debtUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(debt.decimals)), nil)
 				maxLiquidatableDebt = new(big.Int).Mul(totalDefaultLiquidatableBase, debtUnit)
 				maxLiquidatableDebt.Div(maxLiquidatableDebt, debt.price)
@@ -112,25 +113,7 @@ func (s *StrategyEngine) CalculateOptimalRecipe(userAddr string, position *model
 		}
 
 		for _, col := range collaterals {
-			colBase := valueInBaseCurrency(col.balance, col.price, col.decimals)
 
-			maxLiquidatableDebt := new(big.Int).Set(debt.balance)
-
-			if colBase.Cmp(MinBaseMaxCloseFactorThreshold) >= 0 &&
-				debtBase.Cmp(MinBaseMaxCloseFactorThreshold) >= 0 &&
-				hf.Cmp(CloseFactorHfThreshold) > 0 {
-
-				totalDefaultLiquidatableBase := new(big.Int).Mul(totalDebtInBase, DefaultLiquidationCloseFactor)
-				totalDefaultLiquidatableBase.Div(totalDefaultLiquidatableBase, PercentageFactor)
-
-				if debtBase.Cmp(totalDefaultLiquidatableBase) > 0 {
-					debtUnit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(debt.decimals)), nil)
-					maxLiquidatableDebt = new(big.Int).Mul(totalDefaultLiquidatableBase, debtUnit)
-					maxLiquidatableDebt.Div(maxLiquidatableDebt, debt.price)
-				}
-			}
-
-			// 确定实际生效的 Liquidation Bonus 和 Protocol Fee
 			bonusBps := uint16(0)
 			protocolFeeBps := uint16(0)
 
@@ -144,10 +127,9 @@ func (s *StrategyEngine) CalculateOptimalRecipe(userAddr string, position *model
 			if position.EModeFetched && position.EModeCategoryId != 0 {
 				eModeCat := s.store.EModeCategories()[position.EModeCategoryId]
 				if eModeCat != nil {
-					debtBit := new(big.Int).And(new(big.Int).Rsh(eModeCat.CollateralBitmap, uint(debt.reserveID)), big.NewInt(1))
 					colBit := new(big.Int).And(new(big.Int).Rsh(eModeCat.CollateralBitmap, uint(col.reserveID)), big.NewInt(1))
 
-					if debtBit.Cmp(big.NewInt(1)) == 0 && colBit.Cmp(big.NewInt(1)) == 0 {
+					if colBit.Cmp(big.NewInt(1)) == 0 {
 						bonusBps = eModeCat.LiquidationBonus
 					}
 				}
@@ -191,23 +173,21 @@ func (s *StrategyEngine) CalculateOptimalRecipe(userAddr string, position *model
 				liquidationProtocolFee.Div(liquidationProtocolFee, PercentageFactor)
 			}
 
-			// 清算人实际入账的抵押物
+			// 清算人实际入账的抵押物 (Gross - Fee)
 			botReceivesCollateral := new(big.Int).Sub(actualCollateralToLiquidate, liquidationProtocolFee)
 
-			totalColLiquidated := new(big.Int).Add(actualCollateralToLiquidate, liquidationProtocolFee)
-			if actualDebtToCover.Cmp(debt.balance) < 0 && totalColLiquidated.Cmp(col.balance) < 0 {
-
+			if actualDebtToCover.Cmp(debt.balance) < 0 && actualCollateralToLiquidate.Cmp(col.balance) < 0 {
 				leftoverDebt := new(big.Int).Sub(debt.balance, actualDebtToCover)
 				leftoverDebtBase := valueInBaseCurrency(leftoverDebt, debt.price, debt.decimals)
 
 				leftoverCol := new(big.Int).Sub(col.balance, actualCollateralToLiquidate)
 				leftoverColBase := valueInBaseCurrency(leftoverCol, col.price, col.decimals)
 
-				// 如果任一残留资产价值小于 1000 USD，合约会直接 Revert，必须跳过此组合
 				if leftoverDebtBase.Cmp(MinLeftoverBase) < 0 || leftoverColBase.Cmp(MinLeftoverBase) < 0 {
 					continue
 				}
 			}
+
 			costFactor := big.NewInt(int64(10000 + flashloanFeeBps.Int64()))
 			debtCostAmt := new(big.Int).Mul(actualDebtToCover, costFactor)
 			debtCostAmt.Div(debtCostAmt, PercentageFactor)
